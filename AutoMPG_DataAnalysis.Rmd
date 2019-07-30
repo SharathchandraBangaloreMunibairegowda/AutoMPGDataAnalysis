@@ -1,0 +1,101 @@
+---
+title: "Auto MPG Data Analysis"
+author: "Sharathchandra BM"
+---
+
+Libraries Used:
+
+```{r}
+library(tidyr)
+library(reshape2)
+library(ggplot2)
+library(visreg)
+library(randomForest)
+```
+
+Data is read into for processing
+
+```{r}
+data <- read.csv("C:/Users/Sharathchandra/Desktop/Skill Assessment/Pinpoint/auto-mpg.data.csv",header = T, col.names = c("mpg","cylinders","displacement","horsepower","weight","acceleration","model_year", "origin","car_name"))
+```
+
+Exploratory Analysis and Visualizations
+
+The data consists of 397 observations and 9 attributes. "car_name" column contains unique values. "origin" column conatins values - 1,2 and 3. So, I have made an assumption here that these values represnt 'Americas', 'European Union' and 'Asia' origin regions. 'model_year' column says that the 80's (1970 - 1979) cars' data. The other columns give a brief specifications or values of cars.
+
+1. Except Acceleration column, rest of the column values are right skewed.
+2. There are more number of '4' cylinder cars than others. And, they also prove to have a better miles per gallon value. '8' cylinder cars have the worst MPG values. There are not many '3' and '5' cylinder car observations. But, we can make a safe assumption that '8' cylinder cars give poor MPG.
+3. Most of '4' cylinder cars have better HP along with MPG values. Most of '8' cylinder cars have less HP along with worse MPG values.
+4. '1' origin produces more of '6' and '8' cylinder cars.
+5. The most important plot which gives us how the attributes are correlated. This visualization says that cylinders, displacement and weight values negatively impact mpg value. The cars have got better with mpg value along with years. This is understandable as the scientific and manufacturing process got better. And, according to assumption made, origin '3' - Asia cars have better mpg value.
+
+Please do look into this corogram for further analysis of data.
+
+```{r}
+data$horsepower <- as.numeric(data$horsepower)
+data$model_year <- data$model_year %>% factor(labels = sort(unique(data$model_year)))
+data$origin <- data$origin %>% factor(labels = sort(unique(data$origin)))
+data$cylinders <- data$cylinders %>% factor(labels = sort(unique(data$cylinders)))
+
+histData <- melt(data[,-c(9)])
+ggplot(data = histData,mapping = aes(value)) + facet_wrap(~variable,scales = "free_x",nrow = 3) + geom_histogram(colour="black", fill="blue") + theme(panel.background = element_blank()) + theme_bw() + labs(title = "Histogram (Distributed values) of Data per variable", subtitle = "Except Acceleration Data column which is normal distribution, rest are right skewed")
+
+ggplot(data = data,mapping = aes(mpg, fill=cylinders)) + geom_histogram(color="black") + theme(panel.background = element_blank()) + theme_bw() + labs(x = "Miles Per Gallon", y = "Count of Cars", title = "MPG filtered by cylinders VS Count of Cars")
+ggplot(data = data,mapping = aes(horsepower, fill=cylinders)) + geom_histogram(color="black") + theme(panel.background = element_blank()) + theme_bw() + labs(x = "Horsepower (HP)", y = "Count of Cars", title = "HP filtered by cylinders VS Count of Cars")
+ggplot(data = data,mapping = aes(cylinders,fill=origin)) + geom_bar(position = "dodge") + theme(panel.background = element_blank()) + theme_bw() + labs(x = "Cylinders", y = "Count of Cars", title = "Cylinders filtered by origin VS Count of Cars")
+
+data$model_year <- as.numeric(data$model_year)
+data$origin <- as.numeric(data$origin)
+data$cylinders <- as.numeric(data$cylinders)
+cormat <- round(cor(data[,-c(9)]),2)
+
+get_upper_tri <- function(cormat){
+  cormat[lower.tri(cormat)]<- NA
+  return(cormat)
+}
+upper_tri <- get_upper_tri(cormat)
+heatData <- melt(upper_tri, na.rm = TRUE)
+ggplot(data = heatData, mapping = aes(Var2, Var1, fill = value)) + geom_tile(color = "white") + scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1,1), space = "Lab", name="Auto MPG Correlation") + theme_minimal() + theme(axis.text.x = element_text(angle = 45, vjust = 1, size = 12, hjust = 1)) + coord_fixed() + geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) + theme(axis.title.x = element_blank(), axis.title.y = element_blank(), panel.grid.major = element_blank(), panel.border = element_blank(), panel.background = element_blank(), axis.ticks = element_blank(), legend.justification = c(1, 0), legend.position = c(0.6, 0.7), legend.direction = "horizontal")+ guides(fill = guide_colorbar(barwidth = 7, barheight = 1, title.position = "top", title.hjust = 0.5))
+```
+
+ModelData - Split into TrainData and TestData in ratio of 80:20. The data is randomly sampled and put into train/test dataframes.
+
+```{r}
+modelData <- data[,-c(7:9)]
+set.seed(100)
+
+indexes <- sample(nrow(modelData), (0.80*nrow(modelData)), replace = FALSE)
+
+trainData <- modelData[indexes, ]
+testData <- modelData[-indexes, ]
+```
+
+Model 1 - Linear Regression Model.
+
+```{r}
+model1 <- lm(mpg~weight+horsepower+cylinders+displacement+acceleration,data = modelData)
+summary(model1)
+predictions1 <- predict(model1, newdata = testData)
+sqrt(mean((predictions1 - testData$mpg)^2))
+```
+
+Model 2 - Random Forest Algorithm Model with 15 trees and mtry 4 variables at a time.
+
+```{r}
+model2 <- randomForest(mpg ~ ., data = trainData, importance = TRUE, ntree = 15, mtry = 4, replace = T)
+summary(model2)
+predictions2 <- predict(model2, newdata = testData)
+sqrt(mean((predictions2 - testData$mpg)^2))
+```
+
+I have used the below code chunks as well.
+
+plot(model1)
+visreg(model1)
+plot(model2)
+
+These plots are included with PDF file containing all plots - Exploratory and Model Analysis.
+
+I have performed model analysis taking mpg as target variable and weight, horsepower,cylinders,displacement and acceleration as independent variables. RF model proves to be a better regression model with reduction in RMSE value.
+
+Yes, the customer can create a new attribute containing metric values which can tell if the car performs better. Here, in this scenario, as I have considered mpg as target variable - the new metric can conatin values as 'Very Efficient', 'Efficient', 'Good' and 'Bad'. 
